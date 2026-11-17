@@ -19,7 +19,8 @@
   .maplibregl-popup-content { font-size: 13px; line-height: 1.45; max-width: 280px; padding: 12px 14px; }
   .maplibregl-popup-content h3 { margin: 0 0 4px; font-size: 15px; padding-right: 14px; }
   .tag { display: inline-block; font-size: 11px; color: #fff; border-radius: 3px; padding: 1px 6px; margin-bottom: 6px; }
-  .approx { color: #888; font-size: 11px; margin-top: 6px; }
+  .price { margin-top: 6px; padding: 4px 6px; background: #f3f3f3; border-radius: 4px; }
+  .approx { color: #636363; font-size: 11px; margin-top: 6px; }
   .panel { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
            font-size: 12px; line-height: 1.8; }
   .panel b { display: block; font-size: 13px; }
@@ -65,26 +66,33 @@ const PLACES = [
   // Campsites
   { cat: "camp", ll: [45.43144, 7.25284], name: "Camping Casa Bianca",
     desc: "3★, Borgata Brengi 10, ~1500m. Right under the Sergent and Caporal walls. Open mid-April to end of October.",
+    price: "~€13–17 (adult €8.50–9 + pitch €8–15 split between 2).",
     link: ["camping.info", "https://camping.info/en/campsite/camping-casa-bianca"] },
   { cat: "camp", ll: [45.4300, 7.2420], name: "Camping Piccolo Paradiso", approx: true,
     desc: "~3km from Ceresole centre. A main climbers' base on theCrag; Eldorado bouldering right next to it.",
+    price: "~€14–21 (adult €10–12 + tent €7–18 split between 2). Open to 30 Sep.",
     link: ["PNGP", "https://pngp.it/en/parco-accessibile/strutture/piccolo-paradiso-camping"] },
-  { cat: "camp", ll: [45.4338, 7.2545], name: "Camping La Peschiera", approx: true,
-    desc: "Listed on theCrag as a climbers' base; ~5 min walk to the Sergent pedestal.",
-    link: ["meinwomo.net", "https://meinwomo.net/camperarea/italy-ceresole-reale-to-3004735.htm"] },
+  { cat: "camp", ll: [45.43903, 7.27203], name: "Camping Ai Laghetti (formerly La Peschera)",
+    desc: "3★, Borgata San Meinerio 2, 1620m, with bar-restaurant. A campsite for climbers and bikers: basic but has everything. Bungalow €50. Bookings +39 342 725 0602 (call or WhatsApp, ask for Elena).",
+    price: "~€11–17 (adult €7–11 + tent €7–12 split between 2). Open 1 Apr–30 Sep.",
+    link: ["Turismo Torino", "https://turismotorino.org/visit/accommodation/camping-ai-laghetti"] },
 
   // Huts, hotels, B&Bs
   { cat: "stay", ll: [45.4320, 7.2535], name: "Rifugio Le Fonti (Fonti Minerali)", approx: true,
     desc: "GTA hut with half board and on-site restaurant (Rifugio Pier Nigretti), next to Camping Casa Bianca. Reachable by car.",
+    price: "Half board €40–60; dorm €40–45. Open 1 May–30 Sep.",
     link: ["Turismo Torino", "https://turismotorino.org/visit/accommodation/le-fonti-minerali-1"] },
   { cat: "stay", ll: [45.4413, 7.2101], name: "Rifugio Massimo Mila",
     desc: "On the north side of Lago di Ceresole. Open all year, reachable by car.",
+    price: "~€30 B&B, ~€46 half board (undated listing).",
     link: ["PNGP", "https://www.pngp.it/en/marchio-qualita/massimo-mila-hut"] },
   { cat: "stay", ll: [45.4535, 7.3150], name: "Albergo Gran Paradiso + Posto Tappa di Noasca", approx: true,
     desc: "Bar-restaurant and 19-bed hostel, Via Umberto I, Noasca. Bernd Zangerl's pick for hungry climbers. Posto tappa open all year, booking needed: +39 0124 901003.",
+    price: "Hotel ~€45–50 sharing a double (about €95/room, a June rate), plus a €25 spa fee listed on Expedia. Posto tappa: not published.",
     link: ["Posto tappa info", "https://www.planetmountain.com/en/mountain-huts/posto-tappa-di-noasca-valle-dell-orco.html"] },
   { cat: "stay", ll: [45.4120, 7.5400], name: "B&B Valle Orco", approx: true,
     desc: "Località Apparè 48, Sparone (lower valley). Recommended on theCrag; handy for lower-valley crags and boulders.",
+    price: "~€45 (€90/night for a double with breakfast on Booking.com, Sept 2027).",
     link: ["Hotels.com", "https://ie.hotels.com/ho1228154112/b-b-valle-orco-sparone-italy"] },
 
   // Towns & food
@@ -176,6 +184,7 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
     const el = document.createElement("div");
     el.innerHTML = `<div class="pin" style="background:${c.color}" title="${p.name}">${glyph(c)}</div>`;
     let html = `<h3>${p.name}</h3><span class="tag" style="background:${c.color}">${c.label}</span><div>${p.desc}</div>`;
+    if (p.price) html += `<div class="price"><b>Sept, per person per night:</b> ${p.price}</div>`;
     if (p.link) html += `<div style="margin-top:6px"><a href="${p.link[1]}" target="_blank" rel="noopener">${p.link[0]} ↗</a></div>`;
     if (p.approx) html += `<div class="approx">📍 Approximate position – check before driving.</div>`;
     const m = new maplibregl.Marker({ element: el, anchor: "bottom" })
