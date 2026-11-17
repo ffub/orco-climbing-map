@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valle dell'Orco – climbing map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body, #map { height: 100%; margin: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .pin { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+         border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff;
+         box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .pin span { transform: rotate(45deg); font-size: 17px; line-height: 1; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.45; max-width: 280px; }
+  .leaflet-popup-content h3 { margin: 0 0 4px; font-size: 15px; }
+  .leaflet-popup-content .tag { display: inline-block; font-size: 11px; color: #fff; border-radius: 3px; padding: 1px 6px; margin-bottom: 6px; }
+  .leaflet-popup-content .approx { color: #888; font-size: 11px; margin-top: 6px; }
+  .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); font-size: 12px; line-height: 1.7; }
+  .legend b { display: block; margin-bottom: 2px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Edit the data here: [lat, lon], name, description, approx (true = position not verified)
+const CATEGORIES = {
+  crag:  { label: "Crags",               icon: "🧗", color: "#C0392B" },
+  camp:  { label: "Campsites",           icon: "⛺", color: "#27AE60" },
+  stay:  { label: "Huts, hotels & B&Bs", icon: "🛏️", color: "#2E86C1" },
+  town:  { label: "Towns & food",        icon: "🏘️", color: "#8E44AD" }
+};
+
+const PLACES = [
+  // Crags (from the PlanetMountain "Orco easy crack" guide + the big walls)
+  { cat: "crag", ll: [45.4360, 7.2515], name: "Sergent", approx: true,
+    desc: "Big multi-pitch wall and the classic cracks.<br><b>Easy-crack picks:</b> Incastromania 6a (hand jams), Mary Poppins 5c+, Paperoga (25m roof crack).<br>Also: Fessura Kosterlitz, Fissure du Panettone, Fessura della Disperazione.<br>Shade only in the afternoon in summer. Park after the long tunnel past Noasca and turn left." },
+  { cat: "crag", ll: [45.4345, 7.2532], name: "Sergent pedestal", approx: true,
+    desc: "Short cracks on the path from the car park to Sergent, ~5 min from La Peschiera campsite.<br><b>Viper 4c</b>, <b>Mamba 5a</b> (cams #0.75–#3), plus Piton on the arête." },
+  { cat: "crag", ll: [45.4300, 7.2565], name: "Parete del Disertore", approx: true,
+    desc: "Directly opposite Sergent, shaded in the morning.<br><b>Paris Texas 6b</b> finger crack (micro cams to #2), White Totem (Edlinger)." },
+  { cat: "crag", ll: [45.4368, 7.2640], name: "Caporal", approx: true,
+    desc: "250m granite wall next to Sergent. The central 'Scudo' (Shield) holds most of the multi-pitch routes." },
+  { cat: "crag", ll: [45.4352, 7.2420], name: "Il Dado", approx: true,
+    desc: "Popular crag above the village.<br><b>Apogeo 6a</b> (short vertical crack), <b>Mister Green 6b</b> (four-star chimney), Cochise, Bianca Parete." },
+  { cat: "crag", ll: [45.4475, 7.2945], name: "Fessura del Tramonto (Sunset Crack)", approx: true,
+    desc: "Below the long tunnel between Noasca and Ceresole – cross the stream to reach it.<br>30m <b>5c</b> crack; double set of cams recommended." },
+
+  // Campsites
+  { cat: "camp", ll: [45.43144, 7.25284], name: "Camping Casa Bianca",
+    desc: "3★, Borgata Brengi 10, ~1500m. Right under the Sergent and Caporal walls. Open mid-April to end of October.",
+    link: ["camping.info", "https://camping.info/en/campsite/camping-casa-bianca"] },
+  { cat: "camp", ll: [45.4300, 7.2420], name: "Camping Piccolo Paradiso", approx: true,
+    desc: "~3km from Ceresole centre. A main climbers' base on theCrag; Eldorado bouldering right next to it.",
+    link: ["PNGP", "https://pngp.it/en/parco-accessibile/strutture/piccolo-paradiso-camping"] },
+  { cat: "camp", ll: [45.4338, 7.2545], name: "Camping La Peschiera", approx: true,
+    desc: "Listed on theCrag as a climbers' base; ~5 min walk to the Sergent pedestal.",
+    link: ["meinwomo.net", "https://meinwomo.net/camperarea/italy-ceresole-reale-to-3004735.htm"] },
+
+  // Huts, hotels, B&Bs
+  { cat: "stay", ll: [45.4320, 7.2535], name: "Rifugio Le Fonti (Fonti Minerali)", approx: true,
+    desc: "GTA hut with half board and on-site restaurant (Rifugio Pier Nigretti), next to Camping Casa Bianca. Reachable by car.",
+    link: ["Turismo Torino", "https://turismotorino.org/visit/accommodation/le-fonti-minerali-1"] },
+  { cat: "stay", ll: [45.4413, 7.2101], name: "Rifugio Massimo Mila",
+    desc: "On the north side of Lago di Ceresole. Open all year, reachable by car.",
+    link: ["PNGP", "https://www.pngp.it/en/marchio-qualita/massimo-mila-hut"] },
+  { cat: "stay", ll: [45.4535, 7.3150], name: "Albergo Gran Paradiso + Posto Tappa di Noasca", approx: true,
+    desc: "Bar-restaurant and 19-bed hostel, Via Umberto I, Noasca. Bernd Zangerl's pick for hungry climbers. Posto tappa open all year, booking needed: +39 0124 901003.",
+    link: ["Posto tappa info", "https://www.planetmountain.com/en/mountain-huts/posto-tappa-di-noasca-valle-dell-orco.html"] },
+  { cat: "stay", ll: [45.4120, 7.5400], name: "B&B Valle Orco", approx: true,
+    desc: "Località Apparè 48, Sparone (lower valley). Recommended on theCrag; handy for lower-valley crags and boulders.",
+    link: ["Hotels.com", "https://ie.hotels.com/ho1228154112/b-b-valle-orco-sparone-italy"] },
+
+  // Towns & food
+  { cat: "town", ll: [45.4322, 7.2357], name: "Ceresole Reale", desc: "Main base for the upper valley (~1600m): lake, shops, cafés. Sergent and Caporal are just down the valley." },
+  { cat: "town", ll: [45.4540, 7.3160], name: "Noasca", desc: "Village below the long tunnel. Restobar Gran Paradiso for food." },
+  { cat: "town", ll: [45.4163, 7.4631], name: "Locana", desc: "Larger village in the middle valley." },
+  { cat: "town", ll: [45.4150, 7.5450], name: "Sparone", desc: "Lower valley, where the Orco climbing starts." }
+];
+
+const topo = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+  maxZoom: 17, attribution: 'Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' });
+const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
+const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom: 19, attribution: "Imagery © Esri" });
+
+const map = L.map("map", { layers: [topo] });
+const groups = {};
+for (const [key, c] of Object.entries(CATEGORIES)) groups[key] = L.layerGroup().addTo(map);
+
+const bounds = [];
+for (const p of PLACES) {
+  const c = CATEGORIES[p.cat];
+  const icon = L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -32],
+    html: `<div class="pin" style="background:${c.color}"><span>${c.icon}</span></div>` });
+  let html = `<h3>${p.name}</h3><span class="tag" style="background:${c.color}">${c.label}</span><div>${p.desc}</div>`;
+  if (p.link) html += `<div style="margin-top:6px"><a href="${p.link[1]}" target="_blank" rel="noopener">${p.link[0]} ↗</a></div>`;
+  if (p.approx) html += `<div class="approx">📍 Approximate position – check before driving.</div>`;
+  L.marker(p.ll, { icon, title: p.name }).bindPopup(html).addTo(groups[p.cat]);
+  bounds.push(p.ll);
+}
+
+// Open on the upper valley (Ceresole–Noasca), where nearly everything is
+map.fitBounds(PLACES.filter(p => p.ll[1] < 7.4).map(p => p.ll), { padding: [30, 30] });
+
+const overlays = {};
+for (const [key, c] of Object.entries(CATEGORIES)) overlays[`${c.icon} ${c.label}`] = groups[key];
+L.control.layers({ "Topo": topo, "Streets": osm, "Satellite": sat }, overlays, { collapsed: true }).addTo(map);
+
+const legend = L.control({ position: "bottomleft" });
+legend.onAdd = () => {
+  const d = L.DomUtil.create("div", "legend");
+  d.innerHTML = "<b>Valle dell'Orco</b>" + Object.values(CATEGORIES).map(c => `${c.icon} ${c.label}`).join("<br>") +
+    `<br><a href="#" id="all">Show whole valley</a>`;
+  L.DomEvent.disableClickPropagation(d);
+  d.querySelector("#all").onclick = e => { e.preventDefault(); map.fitBounds(bounds, { padding: [30, 30] }); };
+  return d;
+};
+legend.addTo(map);
+</script>
+</body>
+</html>
