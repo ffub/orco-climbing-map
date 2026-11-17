@@ -153,6 +153,9 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.touchZoomRotate.disableRotation();
+  // Keep the credits collapsed behind the (i) button; MapLibre opens them on first load
+  const collapseCredits = () => document.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+  map.on("load", collapseCredits);
   map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
   // Pins
@@ -185,6 +188,7 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
         current = b.dataset.n;
         d.querySelectorAll("#bm button").forEach(x => x.classList.toggle("on", x === b));
         map.setStyle(await buildStyle(current));
+        map.once("idle", collapseCredits);
       });
       d.querySelectorAll("[data-cat]").forEach(cb => cb.onchange = () =>
         markers[cb.dataset.cat].forEach(m => m.getElement().style.display = cb.checked ? "" : "none"));
