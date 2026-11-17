@@ -4,25 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Valle dell'Orco – climbing map</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
 <style>
   html, body, #map { height: 100%; margin: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .pin { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  .pin { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; cursor: pointer;
          border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff;
          box-shadow: 0 1px 4px rgba(0,0,0,.4); }
   .pin span { transform: rotate(45deg); font-size: 17px; line-height: 1; }
-  .leaflet-popup-content { font-size: 13px; line-height: 1.45; max-width: 280px; }
-  .leaflet-popup-content h3 { margin: 0 0 4px; font-size: 15px; }
-  .leaflet-popup-content .tag { display: inline-block; font-size: 11px; color: #fff; border-radius: 3px; padding: 1px 6px; margin-bottom: 6px; }
-  .leaflet-popup-content .approx { color: #888; font-size: 11px; margin-top: 6px; }
-  .legend { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); font-size: 12px; line-height: 1.7; }
-  .legend b { display: block; margin-bottom: 2px; font-size: 13px; }
+  .maplibregl-popup-content { font-size: 13px; line-height: 1.45; max-width: 280px; padding: 12px 14px; }
+  .maplibregl-popup-content h3 { margin: 0 0 4px; font-size: 15px; padding-right: 14px; }
+  .tag { display: inline-block; font-size: 11px; color: #fff; border-radius: 3px; padding: 1px 6px; margin-bottom: 6px; }
+  .approx { color: #888; font-size: 11px; margin-top: 6px; }
+  .panel { background: #fff; padding: 8px 10px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+           font-size: 12px; line-height: 1.8; }
+  .panel b { display: block; font-size: 13px; }
+  .panel label { display: block; cursor: pointer; white-space: nowrap; }
+  .panel a { color: #2E6FB0; }
+  .seg { display: flex; gap: 2px; margin: 4px 0 2px; }
+  .seg button { flex: 1; font: inherit; font-size: 12px; border: 1px solid #ccc; background: #f6f6f6;
+                padding: 3px 6px; cursor: pointer; border-radius: 4px; }
+  .maplibregl-ctrl.panel .seg button { width: auto; height: auto; color: #222; }
+  .maplibregl-ctrl.panel .seg button:not(.on):hover { background: #e9e9e9; }
+  .maplibregl-ctrl.panel .seg button.on, .maplibregl-ctrl.panel .seg button.on:hover { background: #333; color: #fff; border-color: #333; }
+  @media (max-width: 480px) { .panel { font-size: 11px; line-height: 1.6; } }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script>
 // Edit the data here: [lat, lon], name, description, approx (true = position not verified)
 const CATEGORIES = {
@@ -79,46 +89,105 @@ const PLACES = [
   { cat: "town", ll: [45.4150, 7.5450], name: "Sparone", desc: "Lower valley, where the Orco climbing starts." }
 ];
 
-const topo = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-  maxZoom: 17, attribution: 'Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)' });
-const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' });
-const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  maxZoom: 19, attribution: "Imagery © Esri" });
+// ---- Background maps -------------------------------------------------------
+// "Map" = OpenStreetMap's own vector tiles (Shortbread schema, VersaTiles Colorful style).
+// The style is a copy of https://vector.openstreetmap.org/styles/shortbread/colorful.json kept in
+// this repo (OSM's style/sprite files don't allow cross-site loading); tiles come live from OSM.
+const OSM_VECTOR_TILES = "https://vector.openstreetmap.org/shortbread_v1/{z}/{x}/{y}.mvt";
+const DEM = { type: "raster-dem", tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+              encoding: "terrarium", tileSize: 256, maxzoom: 14,
+              attribution: '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Terrain: Mapzen/AWS</a>' };
+const here = path => new URL(path, location.href).href;
 
-const map = L.map("map", { layers: [topo] });
-const groups = {};
-for (const [key, c] of Object.entries(CATEGORIES)) groups[key] = L.layerGroup().addTo(map);
+function rasterStyle(tiles, attribution, maxzoom) {
+  return { version: 8, sources: { base: { type: "raster", tiles: [tiles], tileSize: 256, maxzoom, attribution } },
+           layers: [{ id: "base", type: "raster", source: "base" }] };
+}
+const BASEMAPS = {
+  Map: async () => {
+    const s = await (await fetch(here("style.json"))).json();
+    s.sprite = here("sprites/sprites");
+    for (const src of Object.values(s.sources)) if (src.type === "vector") src.tiles = [OSM_VECTOR_TILES];
+    return s;
+  },
+  Topo: async () => rasterStyle("https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+    'Map data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM | Style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)', 17),
+  Satellite: async () => rasterStyle("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "Imagery © Esri", 19)
+};
 
-const bounds = [];
-for (const p of PLACES) {
-  const c = CATEGORIES[p.cat];
-  const icon = L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -32],
-    html: `<div class="pin" style="background:${c.color}"><span>${c.icon}</span></div>` });
-  let html = `<h3>${p.name}</h3><span class="tag" style="background:${c.color}">${c.label}</span><div>${p.desc}</div>`;
-  if (p.link) html += `<div style="margin-top:6px"><a href="${p.link[1]}" target="_blank" rel="noopener">${p.link[0]} ↗</a></div>`;
-  if (p.approx) html += `<div class="approx">📍 Approximate position – check before driving.</div>`;
-  L.marker(p.ll, { icon, title: p.name }).bindPopup(html).addTo(groups[p.cat]);
-  bounds.push(p.ll);
+let current = "Map";
+
+async function buildStyle(name) {
+  const s = await BASEMAPS[name]();
+  s.sources.dem = DEM;
+  if (name === "Map") {
+    // Hill shading under the water, roads and labels so the valley's relief shows
+    const i = s.layers.findIndex(l => l.id === "water-river");
+    s.layers.splice(i < 0 ? 1 : i, 0, { id: "hillshade", type: "hillshade", source: "dem",
+      paint: { "hillshade-exaggeration": 0.3, "hillshade-shadow-color": "#5a5a5a", "hillshade-highlight-color": "#ffffff" } });
+  }
+  return s;
 }
 
-// Open on the upper valley (Ceresole–Noasca), where nearly everything is
-map.fitBounds(PLACES.filter(p => p.ll[1] < 7.4).map(p => p.ll), { padding: [30, 30] });
+const lls = PLACES.map(p => [p.ll[1], p.ll[0]]);
+const boundsOf = pts => pts.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(pts[0], pts[0]));
+const upper = boundsOf(lls.filter(p => p[0] < 7.4));   // Ceresole–Noasca, where nearly everything is
+const whole = boundsOf(lls);
+// Leave room on the left for the panel (less on phones)
+const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 30;
 
-const overlays = {};
-for (const [key, c] of Object.entries(CATEGORIES)) overlays[`${c.icon} ${c.label}`] = groups[key];
-L.control.layers({ "Topo": topo, "Streets": osm, "Satellite": sat }, overlays, { collapsed: true }).addTo(map);
+(async () => {
+  const map = new maplibregl.Map({
+    container: "map", style: await buildStyle(current), bounds: upper,
+    fitBoundsOptions: { padding: PAD },
+    dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0,
+    attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/fixthemap">Fix the map</a>' }
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+  map.touchZoomRotate.disableRotation();
+  map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
-const legend = L.control({ position: "bottomleft" });
-legend.onAdd = () => {
-  const d = L.DomUtil.create("div", "legend");
-  d.innerHTML = "<b>Valle dell'Orco</b>" + Object.values(CATEGORIES).map(c => `${c.icon} ${c.label}`).join("<br>") +
-    `<br><a href="#" id="all">Show whole valley</a>`;
-  L.DomEvent.disableClickPropagation(d);
-  d.querySelector("#all").onclick = e => { e.preventDefault(); map.fitBounds(bounds, { padding: [30, 30] }); };
-  return d;
-};
-legend.addTo(map);
+  // Pins
+  const markers = {};
+  for (const key of Object.keys(CATEGORIES)) markers[key] = [];
+  for (const p of PLACES) {
+    const c = CATEGORIES[p.cat];
+    const el = document.createElement("div");
+    el.innerHTML = `<div class="pin" style="background:${c.color}" title="${p.name}"><span>${c.icon}</span></div>`;
+    let html = `<h3>${p.name}</h3><span class="tag" style="background:${c.color}">${c.label}</span><div>${p.desc}</div>`;
+    if (p.link) html += `<div style="margin-top:6px"><a href="${p.link[1]}" target="_blank" rel="noopener">${p.link[0]} ↗</a></div>`;
+    if (p.approx) html += `<div class="approx">📍 Approximate position – check before driving.</div>`;
+    const m = new maplibregl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat([p.ll[1], p.ll[0]])
+      .setPopup(new maplibregl.Popup({ offset: [0, -36], maxWidth: "290px" }).setHTML(html))
+      .addTo(map);
+    markers[p.cat].push(m);
+  }
+
+  // Panel: background, categories, whole valley
+  const panel = {
+    onAdd() {
+      const d = document.createElement("div");
+      d.className = "maplibregl-ctrl panel";
+      d.innerHTML = "<b>Valle dell'Orco</b>" +
+        `<div class="seg" id="bm">${Object.keys(BASEMAPS).map(n => `<button data-n="${n}" class="${n === current ? "on" : ""}">${n}</button>`).join("")}</div>` +
+        Object.entries(CATEGORIES).map(([k, c]) => `<label><input type="checkbox" data-cat="${k}" checked> ${c.icon} ${c.label}</label>`).join("") +
+        `<a href="#" id="all">Show whole valley</a>`;
+      d.querySelectorAll("#bm button").forEach(b => b.onclick = async () => {
+        current = b.dataset.n;
+        d.querySelectorAll("#bm button").forEach(x => x.classList.toggle("on", x === b));
+        map.setStyle(await buildStyle(current));
+      });
+      d.querySelectorAll("[data-cat]").forEach(cb => cb.onchange = () =>
+        markers[cb.dataset.cat].forEach(m => m.getElement().style.display = cb.checked ? "" : "none"));
+      d.querySelector("#all").onclick = e => { e.preventDefault(); map.fitBounds(whole, { padding: PAD }); };
+      return d;
+    },
+    onRemove() {}
+  };
+  map.addControl(panel, "top-left");
+})();
 </script>
 </body>
 </html>
