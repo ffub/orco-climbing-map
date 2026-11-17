@@ -11,7 +11,11 @@
   .pin { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; cursor: pointer;
          border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid #fff;
          box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-  .pin span { transform: rotate(45deg); font-size: 17px; line-height: 1; }
+  /* Icons are single-colour PNGs used as masks, so their colour is set in CSS */
+  .glyph { display: inline-block; background-color: currentColor;
+           -webkit-mask: var(--src) center / contain no-repeat; mask: var(--src) center / contain no-repeat; }
+  .pin .glyph { width: 19px; height: 19px; color: #fff; transform: rotate(45deg); }
+  .panel .glyph { width: 16px; height: 16px; vertical-align: -3px; margin: 0 3px 0 2px; }
   .maplibregl-popup-content { font-size: 13px; line-height: 1.45; max-width: 280px; padding: 12px 14px; }
   .maplibregl-popup-content h3 { margin: 0 0 4px; font-size: 15px; padding-right: 14px; }
   .tag { display: inline-block; font-size: 11px; color: #fff; border-radius: 3px; padding: 1px 6px; margin-bottom: 6px; }
@@ -36,10 +40,11 @@
 <script>
 // Edit the data here: [lat, lon], name, description, approx (true = position not verified)
 const CATEGORIES = {
-  crag:  { label: "Crags",               icon: "🧗", color: "#C0392B" },
-  camp:  { label: "Campsites",           icon: "⛺", color: "#27AE60" },
-  stay:  { label: "Huts, hotels & B&Bs", icon: "🛏️", color: "#2E86C1" },
-  town:  { label: "Towns & food",        icon: "🏘️", color: "#8E44AD" }
+  // Colours all have at least 5.3:1 contrast with white (WCAG AA), for the white icons on the pins
+  crag:  { label: "Crags",               icon: "icons/crag.png", color: "#B42318" },
+  camp:  { label: "Campsites",           icon: "icons/camp.png", color: "#1E7A3E" },
+  stay:  { label: "Huts, hotels & B&Bs", icon: "icons/stay.png", color: "#1F65A6" },
+  town:  { label: "Towns & food",        icon: "icons/town.png", color: "#7A3C9A" }
 };
 
 const PLACES = [
@@ -97,6 +102,8 @@ const OSM_VECTOR_TILES = "https://vector.openstreetmap.org/shortbread_v1/{z}/{x}
 const DEM = { type: "raster-dem", tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
               encoding: "terrarium", tileSize: 256, maxzoom: 14,
               attribution: '<a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md">Terrain: Mapzen/AWS</a>' };
+const glyph = (c, color) =>
+  `<i class="glyph" aria-hidden="true" style="--src:url('${c.icon}')${color ? `;color:${color}` : ""}"></i>`;
 const here = path => new URL(path, location.href).href;
 
 function rasterStyle(tiles, attribution, maxzoom) {
@@ -142,7 +149,7 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
     container: "map", style: await buildStyle(current), bounds: upper,
     fitBoundsOptions: { padding: PAD },
     dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0,
-    attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/fixthemap">Fix the map</a>' }
+    attributionControl: { compact: true, customAttribution: '<a href="https://www.openstreetmap.org/fixthemap">Fix the map</a> | Icons by <a href="https://icons8.com" target="_blank" rel="noopener">Icons8</a>' }
   });
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
   map.touchZoomRotate.disableRotation();
@@ -154,7 +161,7 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
   for (const p of PLACES) {
     const c = CATEGORIES[p.cat];
     const el = document.createElement("div");
-    el.innerHTML = `<div class="pin" style="background:${c.color}" title="${p.name}"><span>${c.icon}</span></div>`;
+    el.innerHTML = `<div class="pin" style="background:${c.color}" title="${p.name}">${glyph(c)}</div>`;
     let html = `<h3>${p.name}</h3><span class="tag" style="background:${c.color}">${c.label}</span><div>${p.desc}</div>`;
     if (p.link) html += `<div style="margin-top:6px"><a href="${p.link[1]}" target="_blank" rel="noopener">${p.link[0]} ↗</a></div>`;
     if (p.approx) html += `<div class="approx">📍 Approximate position – check before driving.</div>`;
@@ -172,7 +179,7 @@ const PAD = innerWidth > 600 ? { top: 40, bottom: 40, right: 50, left: 210 } : 3
       d.className = "maplibregl-ctrl panel";
       d.innerHTML = "<b>Valle dell'Orco</b>" +
         `<div class="seg" id="bm">${Object.keys(BASEMAPS).map(n => `<button data-n="${n}" class="${n === current ? "on" : ""}">${n}</button>`).join("")}</div>` +
-        Object.entries(CATEGORIES).map(([k, c]) => `<label><input type="checkbox" data-cat="${k}" checked> ${c.icon} ${c.label}</label>`).join("") +
+        Object.entries(CATEGORIES).map(([k, c]) => `<label><input type="checkbox" data-cat="${k}" checked>${glyph(c, c.color)}${c.label}</label>`).join("") +
         `<a href="#" id="all">Show whole valley</a>`;
       d.querySelectorAll("#bm button").forEach(b => b.onclick = async () => {
         current = b.dataset.n;
